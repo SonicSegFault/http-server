@@ -27,45 +27,73 @@ int http::TcpServer::startServer() {
     while(true){
         ssize_t client_socket;
         sockaddr_in client_address;
-        socklen_t client_addrlen;
+        socklen_t client_addrlen = sizeof(client_address);
         if((client_socket = accept(server_socket, (struct sockaddr*)&client_address, &client_addrlen)) < 0){
             perror("Failed to accept Client"); 
         } else { handleRequest(client_socket, (struct sockaddr*)&client_address, &client_addrlen); }
     }
-
     return 0;
 }
 
 void http::TcpServer::handleRequest(ssize_t client_socket, struct sockaddr* client_address, socklen_t* client_addrlen) {
-    char BUFFER[4096] = {};
-    std::string httprequest;
-    ssize_t requestSize;
-    while((requestSize = recv(client_socket, BUFFER, sizeof(BUFFER), 0)) > 0){
-        httprequest.append(BUFFER, requestSize);
+    char buf[4096];
+    std::string buffer;
+
+    bool headers_done = false;
+    size_t body_start = 0;
+    size_t content_length = 0;
+
+    while (true) {
+        ssize_t n = recv(client_socket, buf, sizeof(buf), 0);
+        if (n == 0) break;
+        if (n < 0) return;
+
+        buffer.append(buf, n);
+
+        // Parse headers when possible
+        if (!headers_done) {
+            size_t pos = buffer.find("\r\n\r\n");
+            if (pos == std::string::npos)
+                continue;
+
+            headers_done = true;
+            body_start = pos + 4;
+
+            // parse Content-Length (if any)
+            size_t cl = buffer.find("Content-Length:");
+            if (cl != std::string::npos) {
+                size_t end = buffer.find("\r\n", cl);
+                std::string len =
+                    buffer.substr(cl + 15, end - (cl + 15));
+                content_length = std::stoul(len);
+            } else {
+                content_length = 0;
+            }
+        }
+
+        if (headers_done) {
+            // GET → no body
+            if (content_length == 0)
+                break;
+
+            // POST → wait for full body
+            if (buffer.size() - body_start >= content_length)
+                break;
+        }
     }
+    std::string header = buffer.substr(0, body_start);
+    std::string body   = buffer.substr(body_start, content_length);
 
-    size_t pos = httprequest.find("Content-Length:");
-    size_t end = httprequest.find("\r\n", pos);
-    std::string strlen = httprequest.substr((pos+15), end-(pos+15));
-    size_t contentlen = std::stoi(strlen);
-    std::string httpbody;
-
-    size_t headerEndpoint = httprequest.find("\r\n\r\n");
-    headerEndpoint = headerEndpoint + 4;
-
-    httpbody = httprequest.substr(headerEndpoint, contentlen);
-
-    std::istringstream iss(httprequest);
+    std::istringstream iss(header);
     std::string method, path, version;
     iss >> method >> path >> version;
 
-    int statusCode = 500;
-    if (method == "GET") { 
-        statusCode = GET(client_socket);
+    if (method == "GET") {
+        GET(client_socket);
+    } else if (method == "POST") {
+        POST(client_socket, body);
     }
-    else if (method == "POST") { 
-        statusCode = POST(client_socket, httpbody);
-    }
+    close(client_socket);
 }
 
 int http::TcpServer::GET(ssize_t client_socket) {
@@ -83,7 +111,15 @@ int http::TcpServer::GET(ssize_t client_socket) {
 }
 
 int http::TcpServer::POST(ssize_t client_socket, std::string body){
-
+    std::string response = "HTTP/1.1 200 OK\r\n" "Content-Type: text/plain\r\n" "Content-Length: "
+    + std::to_string(body.size()) + "\r\n" "\r\n" + body;
+    
+    ssize_t responseSize = response.size(), sentSize = 0;
+    for(ssize_t i = 0; i<responseSize; i += sentSize){
+        sentSize = send(client_socket, response.c_str()+i, responseSize - i, 0);
+        if(sentSize <= 0) return 500;
+    }
+    return 200;
 } 
 
 void http::TcpServer::closeServer() { 

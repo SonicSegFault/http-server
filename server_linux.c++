@@ -3,6 +3,7 @@
 int main() {
     using namespace http;
     
-    // TcpServer server = TcpServer();
+    TcpServer server(8000);
 
+    return 0;
 }

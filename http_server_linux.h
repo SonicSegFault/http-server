@@ -1,4 +1,5 @@
 #include <netinet/in.h>   // sockaddr_in, in_addr, htons()
+#include <string>  
 
 namespace http {
 
@@ -8,7 +9,7 @@ namespace http {
             ~TcpServer();
 
         private:
-            int server_socket;
+            ssize_t server_socket;
             struct sockaddr_in server_address;
 
             int startServer();
