@@ -3,6 +3,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <sstream>
+#include <algorithm>
 
 http::TcpServer::TcpServer(int port): server_socket(-1) {
     server_address.sin_family = AF_INET;
@@ -60,7 +61,9 @@ void http::TcpServer::handleRequest(ssize_t client_socket, struct sockaddr* clie
             body_start = pos + 4;
 
             // parse Content-Length (if any)
-            size_t cl = buffer.find("Content-Length:");
+            auto lowerbuffer = buffer;
+            std::transform(lowerbuffer.begin(), lowerbuffer.end(), lowerbuffer.begin(), ::tolower);
+            size_t cl = lowerbuffer.find("content-length:");
             if (cl != std::string::npos) {
                 size_t end = buffer.find("\r\n", cl);
                 std::string len =
