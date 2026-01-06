@@ -16,17 +16,17 @@ This project demonstrates socket programming, manual HTTP parsing, and simple ro
 
 ## Routes
 
-# GET `/`
+### GET `/`
 Returns a plain text response. Used as a basic root endpoint.
 
-# GET `/file`
+### GET `/file`
 Downloads `something.txt` from the server.
 
 - Forces file download (`Content-Disposition: attachment`)
 - Streams file in 8 KB chunks
 - Sets correct `Content-Length`
 
-# POST `/login`
+### POST `/login`
 Echoes the request body.
 
 - Responds with `201 Created`
